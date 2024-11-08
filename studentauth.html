@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Student Authentication</title>
+  <style>
+    body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background-color: #f5f5f5;
+        margin: 0;
+        padding: 20px;
+    }
+
+    .container {
+        text-align: center;
+        width: 100%;
+        max-width: 400px;
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    input {
+        width: 100%;
+        padding: 10px;
+        margin: 10px 0;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    button {
+        width: 100%;
+        padding: 10px;
+        background-color: #4caf50;
+        border: none;
+        border-radius: 4px;
+        color: white;
+        cursor: pointer;
+        margin-top: 10px;
+    }
+
+    button:hover {
+        background-color: #45a049;
+    }
+
+    button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+    }
+
+    .link {
+        color: #007bff;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+
+    #logout-section, #verification-section {
+        display: none;
+    }
+
+    #reset-password-modal {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: #fff;
+        padding: 20px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+        text-align: center;
+        max-width: 400px;
+        width: 90%;
+    }
+
+    .verification-message {
+        background-color: #fff3cd;
+        border: 1px solid #ffeeba;
+        color: #856404;
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 4px;
+    }
+
+    .error-message {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 4px;
+        display: none;
+    }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Student Authentication</h1>
+
+    <div id="auth-form">
+      <div id="login-form">
+        <h2>Login</h2>
+        <div id="login-error" class="error-message"></div>
+        <input type="email" id="login-email" placeholder="Email" required>
+        <input type="password" id="login-password" placeholder="Password" required>
+        <button id="login-btn">Login</button>
+        <p>Don't have an account? <span class="link" id="signup-link">Signup</span></p>
+      </div>
+
+      <p><span class="link" id="forgot-password-link">Forgot Password?</span></p>
+
+      <div id="reset-password-modal" style="display: none;">
+        <h2>Reset Password</h2>
+        <input type="email" id="reset-email" placeholder="Enter your email" required>
+        <button id="reset-password-btn">Send Password Reset Email</button>
+        <p id="reset-message"></p>
+        <button id="close-modal-btn">Close</button>
+      </div>
+
+      <div id="signup-form" style="display:none;">
+        <h2>Signup</h2>
+                <div id="signup-error" class="error-message"></div>
+                <input type="text" id="signup-name" placeholder="Full Name" required>
+                <input type="email" id="signup-email" placeholder="Email" required>
+                <input type="text" id="signup-enrollment" placeholder="Enrollment Number" required>
+                <input type="text" id="signup-college-id" placeholder="College ID" required>
+                <input type="password" id="signup-password" placeholder="Password" required>
+                <input type="tel" id="signup-phone" placeholder="Phone Number" required>
+                <button id="signup-btn">Signup</button>
+                <p>Already have an account? <span class="link" id="login-link">Login</span></p>
+      </div>
+    </div>
+
+    <div id="verification-section">
+        <div class="verification-message">
+            <h2>Email Verification Required</h2>
+            <p>We've sent a verification link to your email address. Please verify your email to continue.</p>
+            <p>Haven't received the email? <button id="resend-verification">Resend Verification</button></p>
+            <button id="check-verification">I've Verified My Email</button>
+        </div>
+    </div>
+
+    <div id="logout-section">
+        <h2>Welcome, <span id="user-name"></span></h2>
+        <p>Enrollment: <span id="user-enrollment"></span></p>
+        <p>College ID: <span id="user-college-id"></span></p>
+        <button id="logout-btn">Logout</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import {
+      getAuth,
+      createUserWithEmailAndPassword,
+      signInWithEmailAndPassword,
+      signOut,
+      onAuthStateChanged,
+      sendEmailVerification,
+      sendPasswordResetEmail
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      getDoc
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  
+    // set your own firebase config
+    const firebaseConfig = {
+        
+    };
+  
+    try {
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+  
+      const elements = {
+        loginForm: document.getElementById("login-form"),
+        signupForm: document.getElementById("signup-form"),
+        verificationSection: document.getElementById("verification-section"),
+        logoutSection: document.getElementById("logout-section"),
+        authForm: document.getElementById("auth-form"),
+        userName: document.getElementById("user-name"),
+        userEnrollment: document.getElementById("user-enrollment"),
+        userCollegeId: document.getElementById("user-college-id"),
+        loginError: document.getElementById("login-error"),
+        signupError: document.getElementById("signup-error"),
+        resetPasswordModal: document.getElementById("reset-password-modal"),
+        resetEmailInput: document.getElementById("reset-email"),
+        resetMessage: document.getElementById("reset-message")
+      };
+  
+      const buttons = {
+        login: document.getElementById("login-btn"),
+        signup: document.getElementById("signup-btn"),
+        logout: document.getElementById("logout-btn"),
+        resendVerification: document.getElementById("resend-verification"),
+        checkVerification: document.getElementById("check-verification"),
+        resetPassword: document.getElementById("reset-password-btn"),
+        closeModal: document.getElementById("close-modal-btn")
+      };
+  
+      const signupLink = document.getElementById("signup-link");
+      const loginLink = document.getElementById("login-link");
+      const forgotPasswordLink = document.getElementById("forgot-password-link");
+  
+      buttons.signup.addEventListener("click", async () => {
+        const userData = {
+          name: document.getElementById("signup-name").value,
+          email: document.getElementById("signup-email").value,
+          enrollmentNumber: document.getElementById("signup-enrollment").value,
+          collegeId: document.getElementById("signup-college-id").value,
+          phone: document.getElementById("signup-phone").value
+        };
+        const password = document.getElementById("signup-password").value;
+  
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, userData.email, password);
+  
+          await setDoc(doc(db, "users", userCredential.user.uid), {
+            name: userData.name,
+            email: userData.email,
+            enrollmentNumber: userData.enrollmentNumber,
+            collegeId: userData.collegeId,
+            phone: userData.phone
+          });
+  
+          await sendEmailVerification(userCredential.user);
+  
+          elements.authForm.style.display = "none";
+          elements.verificationSection.style.display = "block";
+        } catch (error) {
+          console.error("Error during signup:", error);
+          elements.signupError.textContent = error.message;
+          elements.signupError.style.display = "block";
+        }
+      });
+  
+      buttons.login.addEventListener("click", async () => {
+        const email = document.getElementById("login-email").value;
+        const password = document.getElementById("login-password").value;
+  
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+  
+          if (!userCredential.user.emailVerified) {
+            elements.authForm.style.display = "none";
+            elements.verificationSection.style.display = "block";
+          } else {
+            const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              elements.userName.textContent = userData.name;
+              elements.userEnrollment.textContent = userData.enrollmentNumber;
+              elements.userCollegeId.textContent = userData.collegeId;
+            }
+            elements.authForm.style.display = "none";
+            elements.verificationSection.style.display = "none";
+            elements.logoutSection.style.display = "block";
+          }
+        } catch (error) {
+            let errorMessage = "An unexpected error occurred. Please try again.";
+            let countdownTime = 5;
+
+            switch (error.code) {
+                case "auth/invalid-password":
+                    errorMessage = "Incorrect password. Please try again.";
+                    break;
+                case "auth/invalid-credential":
+                    errorMessage = "Incorrect password/email. Please try again.";
+                    break;
+                case "auth/user-not-found":
+                    errorMessage = "No account found with this email. Please sign up.";
+                    break;
+                case "auth/invalid-email":
+                    errorMessage = "Please enter a valid email address.";
+                    break;
+                case "auth/network-request-failed":
+                    errorMessage = "Network error. Please check your internet connection and try again.";
+                    break;
+                case "auth/too-many-requests":
+                    errorMessage = "Too many unsuccessful login attempts. Please wait a few minutes and try again.";
+                    break;
+                default:
+                    console.error("Error during login:", error);
+                    break;
+            }
+
+            elements.loginError.textContent = `${errorMessage} \n (Auto-close in ${countdownTime}s)`;
+            elements.loginError.style.display = "block";
+            
+            const countdownInterval = setInterval(() => {
+                countdownTime--;
+                elements.loginError.textContent = `${errorMessage} (Auto-close in ${countdownTime}s)`;
+                if (countdownTime <= 0) {
+                    clearInterval(countdownInterval);
+                    elements.loginError.style.display = "none";
+                }
+            }, 1000);
+            }
+
+            
+      });
+  
+      buttons.logout.addEventListener("click", async () => {
+        try {
+          await signOut(auth);
+        } catch (error) {
+          console.error("Error during logout:", error);
+          alert(`Logout error: ${error.message}`);
+        }
+      });
+  
+      buttons.resendVerification.addEventListener("click", async () => {
+        const user = auth.currentUser;
+        if (user) {
+          try {
+            await sendEmailVerification(user);
+            alert("Verification email resent!");
+          } catch (error) {
+            console.error("Error sending verification email:", error);
+            alert(error.message);
+          }
+        }
+      });
+  
+      buttons.checkVerification.addEventListener("click", async () => {
+        const user = auth.currentUser;
+        if (user) {
+          await user.reload();
+          if (user.emailVerified) {
+            elements.verificationSection.style.display = "none";
+            elements.logoutSection.style.display = "block";
+          } else {
+            alert("Email not verified yet. Please check your email and click the verification link.");
+          }
+        }
+      });
+  
+      signupLink.addEventListener("click", () => {
+        elements.loginForm.style.display = "none";
+        elements.signupForm.style.display = "block";
+        elements.loginError.style.display = "none";
+        elements.signupError.style.display = "none";
+      });
+  
+      loginLink.addEventListener("click", () => {
+        elements.signupForm.style.display = "none";
+        elements.loginForm.style.display = "block";
+        elements.loginError.style.display = "none";
+        elements.signupError.style.display = "none";
+      });
+  
+     
+      forgotPasswordLink.addEventListener("click", () => {
+        console.log("Forgot Password link clicked");
+        elements.resetPasswordModal.style.display = "block";
+      });
+  
+    
+      buttons.closeModal.addEventListener("click", () => {
+        elements.resetPasswordModal.style.display = "none";
+        elements.resetMessage.textContent = "";
+      });
+  
+      
+      buttons.resetPassword.addEventListener("click", async () => {
+        const email = elements.resetEmailInput.value;
+        if (email) {
+          try {
+            console.log("Sending password reset email to:", email);
+            await sendPasswordResetEmail(auth, email);
+            elements.resetMessage.textContent = "Password reset email sent. Check your inbox.";
+          } catch (error) {
+            console.error("Error sending reset email:", error);
+            elements.resetMessage.textContent = "Failed to send reset email. Try again.";
+          }
+        } else {
+          elements.resetMessage.textContent = "Please enter a valid email address.";
+        }
+      });
+  
+    
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          console.log("User is signed in:", user.email);
+          if (!user.emailVerified) {
+            elements.authForm.style.display = "none";
+            elements.verificationSection.style.display = "block";
+            elements.logoutSection.style.display = "none";
+          } else {
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              elements.userName.textContent = userData.name;
+              elements.userEnrollment.textContent = userData.enrollmentNumber;
+              elements.userCollegeId.textContent = userData.collegeId;
+              
+            }
+            elements.authForm.style.display = "none";
+            elements.verificationSection.style.display = "none";
+            elements.logoutSection.style.display = "block";
+          }
+        } else {
+          console.log("User is signed out");
+          elements.authForm.style.display = "block";
+          elements.verificationSection.style.display = "none";
+          elements.logoutSection.style.display = "none";
+          elements.loginForm.style.display = "block";
+          elements.signupForm.style.display = "none";
+        }
+      });
+    } catch (error) {
+        if (error instanceof FirebaseError) {
+      console.error("Firebase initialization error:", error);
+      alert(`Firebase initialization error: ${error.message}`);
+    } else {
+      console.error("Unexpected error initializing Firebase:", error);
+      alert("An unexpected error occurred while initializing the application. Please try again later.");
+    }
+    }
+  </script>
+</body>
+</html>
